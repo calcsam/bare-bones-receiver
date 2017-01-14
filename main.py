@@ -1,79 +1,93 @@
 import webapp2
 import logging
-import urllib
 import json
 
 from google.appengine.ext.webapp.mail_handlers import InboundMailHandler
-from google.appengine.api import urlfetch
+from google.appengine.api import mail
+
+import base64
+import random
+import datetime
+import requests
+import requests_toolbelt.adapters.appengine
+
+from secrets import GITHUB_PASSWORD, EMAIL_ACCOUNTS, MY_EMAIL_ACCOUNT, GOOGLE_APPS_ENGINE_EMAIL
+
+requests_toolbelt.adapters.appengine.monkeypatch()
 
 
 class HandleEmail(InboundMailHandler):
     def receive(self, message):
-
-        # parse out fields
-        to = message.to
-        sender = message.sender
-        cc = getattr(message, 'cc', '')
-        date = message.date
-        subject = message.subject
-
-        # Original message, as a python email.message.Message
-        # original = str(message.original)
-
-        html_body = ''
-        for _, body in message.bodies('text/html'):
-            html_body = body.decode()
+        matching_email_accounts = [acct_name for acct_name in EMAIL_ACCOUNTS if acct_name in message.sender]
+        if not matching_email_accounts:
+            logging.info('received message from: %s', message.sender)
+            return
 
         plain_body = ''
         for _, plain in message.bodies('text/plain'):
             plain_body = plain.decode()
 
-        # Attachements are EncodedPayload objects, see
-        # https://code.google.com/p/googleappengine/source/browse/trunk/
-        # python/google/appengine/api/mail.py#536
-        attachments = [{
-                        'filename': attachment[0],
-                        'encoding': attachment[1].encoding,
-                        'payload': attachment[1].payload
-                       }
-                       for attachment
-                       in getattr(message, 'attachments', [])]
+        date = datetime.datetime.now().strftime('%Y-%m-%d')
 
-        # logging, remove what you find to be excessive
-        logging.info('sender: %s', sender)
-        logging.info('to: %s', to)
-        logging.info('cc: %s', cc)
-        logging.info('date: %s', date)
-        logging.info('subject: %s', subject)
-        logging.info('html_body: %s', html_body)
-        logging.info('plain_body: %s', plain_body)
-        logging.info('attachments: %s', [a['filename'] for a in attachments])
+        post_title = (
+            message.subject or
+            str(random.randint(0, 1000))
+        ).lower().replace(" ", "-").replace("re:", "")
 
-        # POST (change to your endpoint, httpbin is cool for testing though)
-        url = 'http://httpbin.org/post'
+        url = "https://api.github.com/repos/sambhagwat/blog/contents/pages/%s---%s/index.md" % (date, post_title)
 
-        form_fields = urllib.urlencode({
-          'sender': sender.encode('utf8'),
-          'to': to.encode('utf8'),
-          'cc': cc.encode('utf8'),
-          'date': date.encode('utf8'),
-          'subject': subject.encode('utf8'),
-          'html_body': html_body.encode('utf8'),
-          'plain_body': plain_body.encode('utf8'),
-          'attachments': json.dumps(attachments)
-        })
+        is_public = 'public' in message.to
+        first_line = plain_body.split('\n')[0]
+        tags_exist = 'tags:' in first_line
 
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+        tags = first_line.replace('tags:', '').replace('Tags:', '').replace(' ', '') if tags_exist else "null"
+        date = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        "2013-10-11T19:47:34.000Z"
+
+        post_message = ("""
+        ---
+        title: %s
+        tags: %s
+        date: "%s"
+        layout: post
+        draft: false
+        public: %s
+        ---
+        %s
+        """ % (
+            post_title,
+            tags,
+            date,
+            is_public,
+            plain_body
+        )).encode('UTF-8')
+
+        logging.info('post_message: %s', post_message)
+
+        form_fields = {
+          'message': "adding %s" % post_title,
+          'content': base64.b64encode(post_message),
         }
 
-        result = urlfetch.fetch(url=url,
-                                method=urlfetch.POST,
-                                payload=form_fields,
-                                headers=headers)
+        logging.info('form_fields to be returned: %s', form_fields)
+
+        headers = {
+            "Authorization": "Basic %s" % base64.b64encode("sambhagwat:%s" % GITHUB_PASSWORD)
+        }
+
+        result = requests.put(url, headers=headers, data=json.dumps(form_fields))
 
         # log more
-        logging.info('POST to %s returned: %s', url, result.status_code)
+        logging.info('PUT to %s returned: %s', url, result.status_code)
         logging.info('Returned content: %s', result.content)
+
+        response_body = "Your email has been received with Github status code %s and response %s" % (result.status_code, result.content)
+
+        mail.send_mail(
+           sender=GOOGLE_APPS_ENGINE_EMAIL,
+           to=MY_EMAIL_ACCOUNT,
+           subject="Re: %s" % message.subject,
+           body=response_body
+        )
 
 application = webapp2.WSGIApplication([HandleEmail.mapping()], debug=True)
