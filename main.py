@@ -45,14 +45,14 @@ class HandleEmail(InboundMailHandler):
         "2013-10-11T19:47:34.000Z"
 
         post_message = ("""---
-        title: %s
-        tags: %s
-        date: "%s"
-        layout: post
-        draft: false
-        public: %s
-        ---
-        %s
+title: %s
+tags: %s
+date: "%s"
+layout: post
+draft: false
+public: %s
+---
+%s
         """ % (
             post_title,
             tags,
