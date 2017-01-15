@@ -36,7 +36,7 @@ class HandleEmail(InboundMailHandler):
 
         url = "https://api.github.com/repos/calcsam/blog-new/contents/pages/%s---%s/index.md" % (date, post_title)
 
-        is_public = 'public' in message.to
+        is_public = "true" if 'public' in message.to else "false"
         first_line = plain_body.split('\n')[0]
         tags_exist = 'tags:' in first_line
 
