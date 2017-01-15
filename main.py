@@ -34,7 +34,7 @@ class HandleEmail(InboundMailHandler):
             str(random.randint(0, 1000))
         ).lower().replace(" ", "-").replace("re:", "")
 
-        url = "https://api.github.com/repos/sambhagwat/blog/contents/pages/%s---%s/index.md" % (date, post_title)
+        url = "https://api.github.com/repos/calcsam/blog-new/contents/pages/%s---%s/index.md" % (date, post_title)
 
         is_public = 'public' in message.to
         first_line = plain_body.split('\n')[0]
