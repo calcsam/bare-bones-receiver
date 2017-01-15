@@ -44,7 +44,7 @@ class HandleEmail(InboundMailHandler):
         date = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
         "2013-10-11T19:47:34.000Z"
 
-        post_message = """---
+        post_message = ("""---
         title: %s
         tags: %s
         date: "%s"
